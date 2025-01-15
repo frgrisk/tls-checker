@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -45,26 +44,26 @@ func runAuto(cmd *cobra.Command, args []string) {
 	// Load root CA for client connections
 	rootCA, err := os.ReadFile(rootCAFile)
 	if err != nil {
-		log.Fatalf("Failed to read root CA certificate: %v", err)
+		logger.Fatal("Failed to read root CA certificate", "error", err)
 	}
 
 	rootCAPool := x509.NewCertPool()
 	if ok := rootCAPool.AppendCertsFromPEM(rootCA); !ok {
-		log.Fatalf("Failed to append root CA certificate to pool")
+		logger.Fatal("Failed to append root CA certificate to pool")
 	}
 
 	// Test HTTP Server
 	httpPort, err := getRandomPort()
 	if err != nil {
-		log.Fatalf("Failed to get random port for HTTP: %v", err)
+		logger.Fatal("Failed to get random port for HTTP", "error", err)
 	}
 
 	httpAddr := fmt.Sprintf("%s:%d", host, httpPort)
-	log.Printf("Starting HTTP server on %s", httpAddr)
+	logger.Info("Starting HTTP server", "address", httpAddr)
 
 	server, err := startHTTPServer(certFile, keyFile, httpAddr)
 	if err != nil {
-		log.Fatalf("Failed to start HTTP server: %v", err)
+		logger.Fatal("Failed to start HTTP server", "error", err)
 	}
 
 	// Give the server a moment to start
@@ -85,9 +84,9 @@ func runAuto(cmd *cobra.Command, args []string) {
 	url := fmt.Sprintf("https://%s", httpAddr)
 	resp, err := client.Get(url)
 	if err != nil {
-		log.Printf("❌ HTTP connection test failed: %v", err)
+		logger.Error("HTTP connection test failed", "error", err)
 	} else {
-		log.Printf("✅ HTTP connection test successful")
+		logger.Info("✅ HTTP connection test successful")
 		resp.Body.Close()
 	}
 
@@ -97,24 +96,27 @@ func runAuto(cmd *cobra.Command, args []string) {
 	// Test RabbitMQ
 	amqpPort, err := getRandomPort()
 	if err != nil {
-		log.Fatalf("Failed to get random port for AMQP: %v", err)
+		logger.Fatal("Failed to get random port for AMQP", "error", err)
 	}
 
 	mgmtPortTLS, err := getRandomPort()
 	if err != nil {
-		log.Fatalf("Failed to get random port for RabbitMQ management TLS: %v", err)
+		logger.Fatal("Failed to get random port for RabbitMQ management TLS", "error", err)
 	}
 
-	log.Printf("Starting RabbitMQ server (AMQPS: %d, Management: HTTPS=%d)", amqpPort, mgmtPortTLS)
+	logger.Info("Starting RabbitMQ server",
+		"amqps_port", amqpPort,
+		"management_port", mgmtPortTLS,
+	)
 
 	amqpAddr := fmt.Sprintf("%s:%d", host, amqpPort)
 	containerID, err := startRabbitMQServer(certFile, keyFile, amqpPort, mgmtPortTLS)
 	if err != nil {
-		log.Fatalf("Failed to start RabbitMQ: %v", err)
+		logger.Fatal("Failed to start RabbitMQ", "error", err)
 	}
 
 	// Give RabbitMQ time to start
-	log.Printf("Waiting for RabbitMQ to start...")
+	logger.Info("Waiting for RabbitMQ to start...")
 	time.Sleep(10 * time.Second)
 
 	// Test RabbitMQ connection
@@ -125,9 +127,9 @@ func runAuto(cmd *cobra.Command, args []string) {
 
 	conn, err := amqp.DialTLS(fmt.Sprintf("amqps://guest:guest@%s", amqpAddr), amqpTLSConfig)
 	if err != nil {
-		log.Printf("❌ RabbitMQ connection test failed: %v", err)
+		logger.Error("RabbitMQ connection test failed", "error", err)
 	} else {
-		log.Printf("✅ RabbitMQ connection test successful")
+		logger.Info("✅ RabbitMQ connection test successful")
 		conn.Close()
 	}
 

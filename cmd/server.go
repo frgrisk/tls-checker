@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,7 +37,7 @@ func runServer(cmd *cobra.Command, args []string) {
 	if useRabbitMQ {
 		containerID, err := startRabbitMQServer(certFile, keyFile, 5671, 15671)
 		if err != nil {
-			log.Fatalf("Failed to start RabbitMQ: %v", err)
+			logger.Fatal("Failed to start RabbitMQ", "error", err)
 		}
 
 		// Wait for interrupt
@@ -50,7 +49,7 @@ func runServer(cmd *cobra.Command, args []string) {
 	} else {
 		server, err := startHTTPServer(certFile, keyFile, addr)
 		if err != nil {
-			log.Fatalf("Failed to start HTTP server: %v", err)
+			logger.Fatal("Failed to start HTTP server", "error", err)
 		}
 
 		// Wait for interrupt
@@ -59,7 +58,7 @@ func runServer(cmd *cobra.Command, args []string) {
 		<-sigChan
 
 		if err := server.Close(); err != nil {
-			log.Printf("Error during shutdown: %v", err)
+			logger.Error("Error during shutdown", "error", err)
 		}
 	}
 }
@@ -85,11 +84,11 @@ func startHTTPServer(certFile, keyFile, addr string) (*http.Server, error) {
 
 	go func() {
 		if err := server.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
-			log.Printf("HTTP server error: %v", err)
+			logger.Error("HTTP server error", "error", err)
 		}
 	}()
 
-	log.Printf("Starting TLS server on %s...", addr)
+	logger.Info("Starting TLS server", "address", addr)
 	return server, nil
 }
 
@@ -173,9 +172,11 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 		return "", fmt.Errorf("failed to start container: %v", err)
 	}
 
-	log.Printf("Started RabbitMQ container with ID: %s", resp.ID[:12])
-	log.Printf("Management UI available at: https://localhost:%d", mgmtPortTLS)
-	log.Printf("AMQPS available at: amqps://localhost:%d", amqpPort)
+	logger.Info("Started RabbitMQ container",
+		"container_id", resp.ID[:12],
+		"management_ui", fmt.Sprintf("https://localhost:%d", mgmtPortTLS),
+		"amqps", fmt.Sprintf("amqps://localhost:%d", amqpPort),
+	)
 
 	return resp.ID, nil
 }
@@ -184,17 +185,17 @@ func cleanupRabbitMQ(containerID string) {
 	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
-		log.Printf("Failed to create Docker client for cleanup: %v", err)
+		logger.Error("Failed to create Docker client for cleanup", "error", err)
 		return
 	}
 	defer cli.Close()
 
 	timeout := 10
 	if err := cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
-		log.Printf("Failed to stop container: %v", err)
+		logger.Error("Failed to stop container", "error", err)
 	}
 
 	if err := cli.ContainerRemove(ctx, containerID, container.RemoveOptions{}); err != nil {
-		log.Printf("Failed to remove container: %v", err)
+		logger.Error("Failed to remove container", "error", err)
 	}
 }
