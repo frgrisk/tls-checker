@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
@@ -190,12 +193,73 @@ func cleanupRabbitMQ(containerID string) {
 	}
 	defer cli.Close()
 
-	timeout := 10
-	if err := cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
-		logger.Error("Failed to stop container", "error", err)
-	}
+	// Create and run cleanup spinner
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 
-	if err := cli.ContainerRemove(ctx, containerID, container.RemoveOptions{}); err != nil {
-		logger.Error("Failed to remove container", "error", err)
+	p := tea.NewProgram(cleanupSpinnerModel{
+		spinner:     s,
+		containerID: containerID,
+		client:      cli,
+		ctx:         ctx,
+	})
+
+	if _, err := p.Run(); err != nil {
+		logger.Error("Failed during cleanup", "error", err)
 	}
+}
+
+type cleanupSpinnerModel struct {
+	spinner     spinner.Model
+	containerID string
+	client      *client.Client
+	ctx         context.Context
+	quitting    bool
+}
+
+type cleanupMsg struct{ err error }
+
+func (m cleanupSpinnerModel) Init() tea.Cmd {
+	return tea.Batch(
+		m.spinner.Tick,
+		func() tea.Msg {
+			timeout := 10
+			if err := m.client.ContainerStop(m.ctx, m.containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+				return cleanupMsg{err}
+			}
+			if err := m.client.ContainerRemove(m.ctx, m.containerID, container.RemoveOptions{}); err != nil {
+				return cleanupMsg{err}
+			}
+			return cleanupMsg{nil}
+		},
+	)
+}
+
+func (m cleanupSpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "q" {
+			m.quitting = true
+			return m, tea.Quit
+		}
+	case cleanupMsg:
+		if msg.err != nil {
+			logger.Error("Cleanup failed", "error", msg.err)
+		}
+		m.quitting = true
+		return m, tea.Quit
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m cleanupSpinnerModel) View() string {
+	if m.quitting {
+		return ""
+	}
+	return fmt.Sprintf("\n  %s Cleaning up RabbitMQ container...\n\n", m.spinner.View())
 }

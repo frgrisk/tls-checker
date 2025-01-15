@@ -9,10 +9,24 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+var spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+
+type spinnerMsg struct{ err error }
+
+type spinnerModel struct {
+	spinner  spinner.Model
+	addr     string
+	tls      *tls.Config
+	quitting bool
+}
 
 var autoCmd = &cobra.Command{
 	Use:   "auto",
@@ -33,6 +47,66 @@ func getRandomPort() (int, error) {
 	}
 	defer listener.Close()
 	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
+func waitForRabbitMQ(addr string, tlsConfig *tls.Config) tea.Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = spinnerStyle
+
+	return spinnerModel{
+		spinner: s,
+		addr:    addr,
+		tls:     tlsConfig,
+	}
+}
+
+func (m spinnerModel) Init() tea.Cmd {
+	return tea.Batch(
+		m.spinner.Tick,
+		func() tea.Msg {
+			// Try to connect every second until successful or timeout
+			start := time.Now()
+			for time.Since(start) < 30*time.Second {
+				conn, err := amqp.DialTLS(fmt.Sprintf("amqps://guest:guest@%s", m.addr), m.tls)
+				if err == nil {
+					conn.Close()
+					return spinnerMsg{nil}
+				}
+				time.Sleep(time.Second)
+			}
+			return spinnerMsg{fmt.Errorf("timeout waiting for RabbitMQ")}
+		},
+	)
+}
+
+func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "q" {
+			m.quitting = true
+			return m, tea.Quit
+		}
+	case spinnerMsg:
+		if msg.err != nil {
+			m.quitting = true
+			return m, tea.Quit
+		}
+		m.quitting = true
+		return m, tea.Quit
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m spinnerModel) View() string {
+	if m.quitting {
+		return ""
+	}
+	return fmt.Sprintf("\n  %s Waiting for RabbitMQ to start...\n\n", m.spinner.View())
 }
 
 func runAuto(cmd *cobra.Command, args []string) {
@@ -115,16 +189,18 @@ func runAuto(cmd *cobra.Command, args []string) {
 		logger.Fatal("Failed to start RabbitMQ", "error", err)
 	}
 
-	// Give RabbitMQ time to start
-	logger.Info("Waiting for RabbitMQ to start...")
-	time.Sleep(10 * time.Second)
-
-	// Test RabbitMQ connection
+	// Wait for RabbitMQ with spinner
 	amqpTLSConfig := &tls.Config{
 		RootCAs:    rootCAPool,
 		ServerName: host,
 	}
 
+	p := tea.NewProgram(waitForRabbitMQ(amqpAddr, amqpTLSConfig))
+	if _, err := p.Run(); err != nil {
+		logger.Fatal("Failed waiting for RabbitMQ", "error", err)
+	}
+
+	// Test RabbitMQ connection
 	conn, err := amqp.DialTLS(fmt.Sprintf("amqps://guest:guest@%s", amqpAddr), amqpTLSConfig)
 	if err != nil {
 		logger.Error("RabbitMQ connection test failed", "error", err)
