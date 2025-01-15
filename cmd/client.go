@@ -27,7 +27,7 @@ func init() {
 	clientCmd.Flags().Bool("rabbitmq", false, "Connect to RabbitMQ instead of HTTP server")
 }
 
-func runClient(cmd *cobra.Command, args []string) {
+func runClient(cmd *cobra.Command, _ []string) {
 	rootCAFile := viper.GetString("ca")
 	addr := viper.GetString("addr")
 
@@ -54,6 +54,7 @@ func runHTTPClient(rootCAFile, addr string) {
 	tlsConfig := &tls.Config{
 		RootCAs:            rootCAPool,
 		InsecureSkipVerify: false,
+		MinVersion:         tls.VersionTLS12,
 	}
 
 	client := &http.Client{
@@ -62,7 +63,7 @@ func runHTTPClient(rootCAFile, addr string) {
 		},
 	}
 
-	url := fmt.Sprintf("https://%s", addr)
+	url := "https://" + addr
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Fatalf("failed to make request: %v", err)
@@ -71,7 +72,7 @@ func runHTTPClient(rootCAFile, addr string) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("failed to read response body: %v", err)
+		log.Fatalf("failed to read response body: %v", err) //nolint:gocritic
 	}
 	fmt.Printf("Server response: %s\n", body)
 }
@@ -91,10 +92,11 @@ func runRabbitMQClient(rootCAFile, addr string) {
 	tlsConfig := &tls.Config{
 		RootCAs:            rootCAPool,
 		InsecureSkipVerify: false,
+		MinVersion:         tls.VersionTLS12,
 	}
 
 	// Connect to RabbitMQ
-	url := fmt.Sprintf("amqps://guest:guest@%s", addr)
+	url := "amqps://guest:guest@" + addr
 	conn, err := amqp.DialTLS(url, tlsConfig)
 	if err != nil {
 		log.Fatalf("failed to connect to RabbitMQ: %v", err)

@@ -1,0 +1,22 @@
+linters:
+  enable-all: true
+  disable:
+    - gochecknoglobals
+    - wsl
+    - depguard
+    - exportloopref
+    - forbidigo
+    - exhaustruct
+    - nlreturn
+    - forcetypeassert
+    - gochecknoinits
+    - noctx
+    - funlen
+    - wrapcheck
+    - varnamelen
+    - containedctx
+    - ireturn
+    - err113
+
+run:
+  timeout: 5m

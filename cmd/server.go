@@ -3,12 +3,15 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,14 +34,14 @@ func init() {
 	serverCmd.Flags().Bool("rabbitmq", false, "Run RabbitMQ server instead of HTTP server")
 }
 
-func runServer(cmd *cobra.Command, args []string) {
+func runServer(cmd *cobra.Command, _ []string) {
 	certFile := viper.GetString("cert")
 	keyFile := viper.GetString("key")
 	addr := viper.GetString("addr")
 
 	useRabbitMQ, _ := cmd.Flags().GetBool("rabbitmq")
 	if useRabbitMQ {
-		containerID, err := startRabbitMQServer(certFile, keyFile, 5671, 15671)
+		containerID, err := startRabbitMQServer(certFile, keyFile, 5671, 15671) //nolint:mnd
 		if err != nil {
 			logger.Fatal("Failed to start RabbitMQ", "error", err)
 		}
@@ -66,27 +69,29 @@ func runServer(cmd *cobra.Command, args []string) {
 	}
 }
 
-// startHTTPServer starts an HTTPS server and returns the server instance
+// startHTTPServer starts an HTTPS server and returns the server instance.
 func startHTTPServer(certFile, keyFile, addr string) (*http.Server, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load server certificate and key: %v", err)
+		return nil, fmt.Errorf("failed to load server certificate and key: %w", err)
 	}
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 
 	server := &http.Server{
-		Addr:      addr,
-		TLSConfig: tlsConfig,
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, TLS client!"))
+		Addr:              addr,
+		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: time.Second,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("Hello, TLS client!"))
 		}),
 	}
 
 	go func() {
-		if err := server.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
+		if err := server.ListenAndServeTLS("", ""); !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP server error", "error", err)
 		}
 	}()
@@ -95,23 +100,23 @@ func startHTTPServer(certFile, keyFile, addr string) (*http.Server, error) {
 	return server, nil
 }
 
-// startRabbitMQServer starts a RabbitMQ server in a Docker container and returns the container ID
+// startRabbitMQServer starts a RabbitMQ server in a Docker container and returns the container ID.
 func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (string, error) {
 	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
-		return "", fmt.Errorf("failed to create Docker client: %v", err)
+		return "", fmt.Errorf("failed to create Docker client: %w", err)
 	}
 	defer cli.Close()
 
 	// Get absolute paths for mounting certificates
 	certPath, err := filepath.Abs(certFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for cert: %v", err)
+		return "", fmt.Errorf("failed to get absolute path for cert: %w", err)
 	}
 	keyPath, err := filepath.Abs(keyFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for key: %v", err)
+		return "", fmt.Errorf("failed to get absolute path for key: %w", err)
 	}
 
 	// Create a temporary rabbitmq.conf file
@@ -130,11 +135,11 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 
 	tmpConfigFile, err := os.CreateTemp("", "rabbitmq.*.conf")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp config: %v", err)
+		return "", fmt.Errorf("failed to create temp config: %w", err)
 	}
 
 	if _, err := tmpConfigFile.WriteString(configContent); err != nil {
-		return "", fmt.Errorf("failed to write config: %v", err)
+		return "", fmt.Errorf("failed to write config: %w", err)
 	}
 	tmpConfigFile.Close()
 
@@ -150,16 +155,16 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 		&container.HostConfig{
 			PortBindings: nat.PortMap{
 				nat.Port(fmt.Sprintf("%d/tcp", amqpPort)): []nat.PortBinding{
-					{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", amqpPort)},
+					{HostIP: "0.0.0.0", HostPort: strconv.Itoa(amqpPort)},
 				},
 				nat.Port(fmt.Sprintf("%d/tcp", mgmtPortTLS)): []nat.PortBinding{
-					{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", mgmtPortTLS)},
+					{HostIP: "0.0.0.0", HostPort: strconv.Itoa(mgmtPortTLS)},
 				},
 			},
 			Binds: []string{
-				fmt.Sprintf("%s:/etc/rabbitmq/certs/cert.pem:ro", certPath),
-				fmt.Sprintf("%s:/etc/rabbitmq/certs/key.pem:ro", keyPath),
-				fmt.Sprintf("%s:/etc/rabbitmq/rabbitmq.conf:ro", tmpConfigFile.Name()),
+				certPath + ":/etc/rabbitmq/certs/cert.pem:ro",
+				keyPath + ":/etc/rabbitmq/certs/key.pem:ro",
+				tmpConfigFile.Name() + ":/etc/rabbitmq/rabbitmq.conf:ro",
 			},
 		},
 		nil,
@@ -167,12 +172,12 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 		"rabbitmq-tls",
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to create container: %v", err)
+		return "", fmt.Errorf("failed to create container: %w", err)
 	}
 
 	// Start container
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", fmt.Errorf("failed to start container: %v", err)
+		return "", fmt.Errorf("failed to start container: %w", err)
 	}
 
 	logger.Info("Started RabbitMQ container",

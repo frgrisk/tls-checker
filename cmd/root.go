@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,10 +28,10 @@ func init() {
 	rootCmd.PersistentFlags().String("ca", "rootCA.pem", "Path to root CA certificate")
 	rootCmd.PersistentFlags().String("addr", "localhost:8443", "Address to serve on or connect to")
 
-	viper.BindPFlag("cert", rootCmd.PersistentFlags().Lookup("cert"))
-	viper.BindPFlag("key", rootCmd.PersistentFlags().Lookup("key"))
-	viper.BindPFlag("ca", rootCmd.PersistentFlags().Lookup("ca"))
-	viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
+	_ = viper.BindPFlag("cert", rootCmd.PersistentFlags().Lookup("cert"))
+	_ = viper.BindPFlag("key", rootCmd.PersistentFlags().Lookup("key"))
+	_ = viper.BindPFlag("ca", rootCmd.PersistentFlags().Lookup("ca"))
+	_ = viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
 }
 
 func initConfig() {
@@ -50,6 +49,6 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+		logger.Info("Using config file:", viper.ConfigFileUsed())
 	}
 }

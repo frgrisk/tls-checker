@@ -3,10 +3,14 @@ package cmd
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -39,9 +43,9 @@ func init() {
 	autoCmd.Flags().String("host", "localhost", "Host to use for connections")
 }
 
-// getRandomPort returns a random available port
+// getRandomPort returns a random available port.
 func getRandomPort() (int, error) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", ":0") //nolint:gosec
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +72,19 @@ func (m spinnerModel) Init() tea.Cmd {
 			// Try to connect every second until successful or timeout
 			start := time.Now()
 			for time.Since(start) < 30*time.Second {
-				conn, err := amqp.DialTLS(fmt.Sprintf("amqps://guest:guest@%s", m.addr), m.tls)
+				conn, err := amqp.DialTLS("amqps://guest:guest@"+m.addr, m.tls)
 				if err == nil {
 					conn.Close()
 					return spinnerMsg{nil}
 				}
+				if !strings.Contains(err.Error(), syscall.ECONNREFUSED.Error()) &&
+					!strings.Contains(err.Error(), syscall.ECONNRESET.Error()) &&
+					err.Error() != io.EOF.Error() {
+					return spinnerMsg{err}
+				}
 				time.Sleep(time.Second)
 			}
-			return spinnerMsg{fmt.Errorf("timeout waiting for RabbitMQ")}
+			return spinnerMsg{errors.New("timeout waiting for RabbitMQ")}
 		},
 	)
 }
@@ -109,7 +118,7 @@ func (m spinnerModel) View() string {
 	return fmt.Sprintf("\n  %s Waiting for RabbitMQ to start...\n\n", m.spinner.View())
 }
 
-func runAuto(cmd *cobra.Command, args []string) {
+func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 	certFile := viper.GetString("cert")
 	keyFile := viper.GetString("key")
 	rootCAFile := viper.GetString("ca")
@@ -145,8 +154,10 @@ func runAuto(cmd *cobra.Command, args []string) {
 
 	// Test HTTP connection
 	clientTLSConfig := &tls.Config{
-		RootCAs:    rootCAPool,
-		ServerName: host,
+		RootCAs:            rootCAPool,
+		ServerName:         host,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: false,
 	}
 
 	client := &http.Client{
@@ -155,7 +166,7 @@ func runAuto(cmd *cobra.Command, args []string) {
 		},
 	}
 
-	url := fmt.Sprintf("https://%s", httpAddr)
+	url := "https://" + httpAddr
 	resp, err := client.Get(url)
 	if err != nil {
 		logger.Error("HTTP connection test failed", "error", err)
@@ -183,16 +194,19 @@ func runAuto(cmd *cobra.Command, args []string) {
 		"management_port", mgmtPortTLS,
 	)
 
-	amqpAddr := fmt.Sprintf("%s:%d", host, amqpPort)
 	containerID, err := startRabbitMQServer(certFile, keyFile, amqpPort, mgmtPortTLS)
 	if err != nil {
 		logger.Fatal("Failed to start RabbitMQ", "error", err)
 	}
 
+	amqpAddr := fmt.Sprintf("%s:%d", host, amqpPort)
+
 	// Wait for RabbitMQ with spinner
 	amqpTLSConfig := &tls.Config{
-		RootCAs:    rootCAPool,
-		ServerName: host,
+		RootCAs:            rootCAPool,
+		ServerName:         host,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: false,
 	}
 
 	p := tea.NewProgram(waitForRabbitMQ(amqpAddr, amqpTLSConfig))
@@ -201,7 +215,7 @@ func runAuto(cmd *cobra.Command, args []string) {
 	}
 
 	// Test RabbitMQ connection
-	conn, err := amqp.DialTLS(fmt.Sprintf("amqps://guest:guest@%s", amqpAddr), amqpTLSConfig)
+	conn, err := amqp.DialTLS("amqps://guest:guest@"+amqpAddr, amqpTLSConfig)
 	if err != nil {
 		logger.Error("RabbitMQ connection test failed", "error", err)
 	} else {
