@@ -8,14 +8,16 @@ A command-line tool for testing TLS connections with both HTTP and RabbitMQ serv
 - RabbitMQ server with TLS support (using Docker)
 - HTTP client for testing TLS connections
 - AMQP client for testing RabbitMQ TLS connections
+- Auto mode for automated testing with random ports
+- Interactive spinners for progress feedback
 - Configurable via command line flags or config file
-- Auto mode for automated testing of both server types
+- TLS 1.2+ enforced for security
 
 ## Installation
 
 ### Prerequisites
 
-- Go 1.19 or later
+- Go 1.21 or later
 - Docker (for RabbitMQ server functionality)
 
 ### Installing from source
@@ -28,7 +30,7 @@ go install https://github.com/frgrisk/tls-checker@latest
 
 ### Auto Mode (Recommended)
 
-Automatically test both HTTP and RabbitMQ TLS connections:
+Automatically test both HTTP and RabbitMQ TLS connections with random ports:
 
 ```bash
 tls-checker auto --cert cert.pem --key key.pem --ca rootCA.pem --host localhost
@@ -41,13 +43,13 @@ This will:
 
 ### Manual Server Modes
 
-### Running HTTP Server
+#### Running HTTP Server
 
 ```bash
 tls-checker server --cert cert.pem --key key.pem --addr localhost:8443
 ```
 
-### Running RabbitMQ Server
+#### Running RabbitMQ Server
 
 ```bash
 tls-checker server --rabbitmq --cert cert.pem --key key.pem
@@ -76,10 +78,7 @@ Configuration can be provided via command-line flags or a config file (`$HOME/.t
 - `--key`: Path to private key file (default: `key.pem`)
 - `--ca`: Path to root CA certificate (default: `rootCA.pem`)
 - `--addr`: Address to serve on or connect to (default: `localhost:8443`)
-
-### Server-specific Flags
-
-- `--rabbitmq`: Run RabbitMQ server instead of HTTP server
+- `--host`: Host to use for connections in auto mode (default: `localhost`)
 
 ### Config File Format
 
@@ -90,18 +89,25 @@ ca: "rootCA.pem"
 addr: "localhost:8443"
 ```
 
-## RabbitMQ Server Details
+## Development
 
-When running the RabbitMQ server:
+### Running Tests
 
-- AMQPS port: 5671
-- Management UI:
-  - HTTP: http://localhost:15672
-  - HTTPS: https://localhost:15671
-- Default credentials: guest/guest
+```bash
+go test ./...
+```
+
+### Linting
+
+The project uses golangci-lint for code quality. To run linters:
+
+```bash
+golangci-lint run
+```
 
 ## Security Notes
 
-- The tool uses TLS 1.2+ for secure communications
-- Certificate verification is enabled by default
-- RabbitMQ server is run in a Docker container with proper TLS configuration
+- TLS 1.2+ enforced for all connections
+- Certificate verification enabled by default
+- RabbitMQ server runs in an isolated Docker container
+- Temporary files cleaned up automatically
