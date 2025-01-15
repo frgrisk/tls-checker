@@ -23,7 +23,7 @@ A command-line tool for testing TLS connections with both HTTP and RabbitMQ serv
 ### Installing from source
 
 ```bash
-go install https://github.com/frgrisk/tls-checker@latest
+go install github.com/frgrisk/tls-checker@latest
 ```
 
 ## Usage
