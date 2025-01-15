@@ -5,3 +5,4 @@ node_modules
 tls-checker
 .idea/
 .vscode/
+dist/
