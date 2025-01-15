@@ -37,6 +37,7 @@ tls-checker auto --cert cert.pem --key key.pem --ca rootCA.pem --host localhost
 ```
 
 This will:
+
 1. Start an HTTPS server on a random port and test the connection
 2. Start a RabbitMQ server with TLS on random ports and test the connection
 3. Clean up all servers after testing
