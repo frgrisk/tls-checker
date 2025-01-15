@@ -9,6 +9,7 @@ A command-line tool for testing TLS connections with both HTTP and RabbitMQ serv
 - HTTP client for testing TLS connections
 - AMQP client for testing RabbitMQ TLS connections
 - Configurable via command line flags or config file
+- Auto mode for automated testing of both server types
 
 ## Installation
 
@@ -24,6 +25,21 @@ go install https://github.com/frgrisk/tls-checker@latest
 ```
 
 ## Usage
+
+### Auto Mode (Recommended)
+
+Automatically test both HTTP and RabbitMQ TLS connections:
+
+```bash
+tls-checker auto --cert cert.pem --key key.pem --ca rootCA.pem --host localhost
+```
+
+This will:
+1. Start an HTTPS server on a random port and test the connection
+2. Start a RabbitMQ server with TLS on random ports and test the connection
+3. Clean up all servers after testing
+
+### Manual Server Modes
 
 ### Running HTTP Server
 
