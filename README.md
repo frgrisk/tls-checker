@@ -1,17 +1,26 @@
 # TLS Checker
 
-A command-line tool for testing TLS connections with both HTTP and RabbitMQ servers.
+A command-line tool for testing and validating TLS certificates, private keys, and root CA configurations. It supports testing TLS connections against both HTTP and RabbitMQ servers, ensuring your certificates are properly configured and trusted.
 
 ## Features
 
-- HTTP server with TLS support
-- RabbitMQ server with TLS support (using Docker)
-- HTTP client for testing TLS connections
-- AMQP client for testing RabbitMQ TLS connections
-- Auto mode for automated testing with random ports
+- Validate TLS certificate chains and trust relationships
+- Test certificate/key pairs against HTTP and RabbitMQ servers
+- Verify root CA trust configuration
+- Auto mode for quick certificate validation with random ports
 - Interactive spinners for progress feedback
 - Configurable via command line flags or config file
 - TLS 1.2+ enforced for security
+
+## Certificate Requirements
+
+The tool expects the following files:
+
+- `cert.pem`: Server certificate
+- `key.pem`: Private key for the server certificate
+- `rootCA.pem`: Root CA certificate for client verification
+
+All certificates should be in PEM format.
 
 ## Installation
 
