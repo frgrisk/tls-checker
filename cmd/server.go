@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +18,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/spf13/cobra"
@@ -108,6 +110,31 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 		return "", fmt.Errorf("failed to create Docker client: %w", err)
 	}
 	defer cli.Close()
+
+	// Check if image exists
+	imageName := "rabbitmq:3-management"
+	_, _, err = cli.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		if !client.IsErrNotFound(err) {
+			return "", fmt.Errorf("failed to inspect image: %w", err)
+		}
+
+		// Image not found, pull it with spinner
+		s := spinner.New()
+		s.Spinner = spinner.Dot
+		s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+
+		p := tea.NewProgram(pullSpinnerModel{
+			spinner: s,
+			client:  cli,
+			ctx:     ctx,
+			image:   imageName,
+		})
+
+		if _, err := p.Run(); err != nil {
+			return "", fmt.Errorf("failed to pull RabbitMQ image: %w", err)
+		}
+	}
 
 	// Get absolute paths for mounting certificates
 	certPath, err := filepath.Abs(certFile)
@@ -267,4 +294,57 @@ func (m cleanupSpinnerModel) View() string {
 		return ""
 	}
 	return fmt.Sprintf("\n  %s Cleaning up RabbitMQ container...\n\n", m.spinner.View())
+}
+
+type pullSpinnerModel struct {
+	spinner  spinner.Model
+	client   *client.Client
+	ctx      context.Context
+	image    string
+	quitting bool
+}
+
+type pullMsg struct{ err error }
+
+func (m pullSpinnerModel) Init() tea.Cmd {
+	return tea.Batch(
+		m.spinner.Tick,
+		func() tea.Msg {
+			reader, err := m.client.ImagePull(m.ctx, m.image, image.PullOptions{})
+			if err != nil {
+				return pullMsg{err}
+			}
+			defer reader.Close()
+			_, _ = io.Copy(io.Discard, reader)
+			return pullMsg{nil}
+		},
+	)
+}
+
+func (m pullSpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "q" {
+			m.quitting = true
+			return m, tea.Quit
+		}
+	case pullMsg:
+		if msg.err != nil {
+			logger.Error("Image pull failed", "error", msg.err)
+		}
+		m.quitting = true
+		return m, tea.Quit
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m pullSpinnerModel) View() string {
+	if m.quitting {
+		return ""
+	}
+	return fmt.Sprintf("\n  %s Pulling RabbitMQ image...\n\n", m.spinner.View())
 }
