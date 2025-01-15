@@ -5,6 +5,7 @@ go 1.23.3
 require (
 	github.com/docker/docker v27.5.0+incompatible
 	github.com/docker/go-connections v0.5.0
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 )
