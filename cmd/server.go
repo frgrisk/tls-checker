@@ -102,21 +102,12 @@ func startHTTPServer(certFile, keyFile, addr string) (*http.Server, error) {
 	return server, nil
 }
 
-// startRabbitMQServer starts a RabbitMQ server in a Docker container and returns the container ID.
-func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (string, error) {
-	ctx := context.Background()
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return "", fmt.Errorf("failed to create Docker client: %w", err)
-	}
-	defer cli.Close()
-
-	// Check if image exists
-	imageName := "rabbitmq:3-management"
-	_, _, err = cli.ImageInspectWithRaw(ctx, imageName)
+// ensureImageExists ensures the RabbitMQ image exists, pulling it if necessary.
+func ensureImageExists(ctx context.Context, cli *client.Client, imageName string) error {
+	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
 	if err != nil {
 		if !client.IsErrNotFound(err) {
-			return "", fmt.Errorf("failed to inspect image: %w", err)
+			return fmt.Errorf("failed to inspect image: %w", err)
 		}
 
 		// Image not found, pull it with spinner
@@ -132,21 +123,14 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 		})
 
 		if _, err := p.Run(); err != nil {
-			return "", fmt.Errorf("failed to pull RabbitMQ image: %w", err)
+			return fmt.Errorf("failed to pull RabbitMQ image: %w", err)
 		}
 	}
+	return nil
+}
 
-	// Get absolute paths for mounting certificates
-	certPath, err := filepath.Abs(certFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for cert: %w", err)
-	}
-	keyPath, err := filepath.Abs(keyFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for key: %w", err)
-	}
-
-	// Create a temporary rabbitmq.conf file
+// createRabbitMQConfig creates a temporary RabbitMQ config file.
+func createRabbitMQConfig(amqpPort, mgmtPortTLS int) (string, error) {
 	configContent := fmt.Sprintf(`
 listeners.ssl.default = %d
 
@@ -169,11 +153,42 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 		return "", fmt.Errorf("failed to write config: %w", err)
 	}
 	tmpConfigFile.Close()
+	return tmpConfigFile.Name(), nil
+}
+
+// startRabbitMQServer starts a RabbitMQ server in a Docker container and returns the container ID.
+func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (string, error) {
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return "", fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer cli.Close()
+
+	imageName := "rabbitmq:3-management"
+	if err := ensureImageExists(ctx, cli, imageName); err != nil {
+		return "", err
+	}
+
+	// Get absolute paths for mounting certificates
+	certPath, err := filepath.Abs(certFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for cert: %w", err)
+	}
+	keyPath, err := filepath.Abs(keyFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for key: %w", err)
+	}
+
+	configPath, err := createRabbitMQConfig(amqpPort, mgmtPortTLS)
+	if err != nil {
+		return "", err
+	}
 
 	// Create container
 	resp, err := cli.ContainerCreate(ctx,
 		&container.Config{
-			Image: "rabbitmq:3-management",
+			Image: imageName,
 			ExposedPorts: nat.PortSet{
 				nat.Port(fmt.Sprintf("%d/tcp", amqpPort)):    {},
 				nat.Port(fmt.Sprintf("%d/tcp", mgmtPortTLS)): {},
@@ -191,7 +206,7 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 			Binds: []string{
 				certPath + ":/etc/rabbitmq/certs/cert.pem:ro",
 				keyPath + ":/etc/rabbitmq/certs/key.pem:ro",
-				tmpConfigFile.Name() + ":/etc/rabbitmq/rabbitmq.conf:ro",
+				configPath + ":/etc/rabbitmq/rabbitmq.conf:ro",
 			},
 		},
 		nil,

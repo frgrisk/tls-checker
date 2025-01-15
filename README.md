@@ -112,7 +112,7 @@ go test ./...
 The project uses golangci-lint for code quality. To run linters:
 
 ```bash
-golangci-lint run
+golangci-lint run ./...
 ```
 
 ## Security Notes
