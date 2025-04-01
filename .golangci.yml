@@ -1,22 +1,42 @@
+version: "2"
 linters:
-  enable-all: true
+  default: all
   disable:
-    - gochecknoglobals
-    - wsl
-    - depguard
-    - exportloopref
-    - forbidigo
-    - exhaustruct
-    - nlreturn
-    - forcetypeassert
-    - gochecknoinits
-    - noctx
-    - funlen
-    - wrapcheck
-    - varnamelen
     - containedctx
-    - ireturn
+    - depguard
     - err113
-
-run:
-  timeout: 5m
+    - exhaustruct
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - ireturn
+    - nlreturn
+    - noctx
+    - varnamelen
+    - wrapcheck
+    - wsl
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
