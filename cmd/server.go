@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -104,9 +105,9 @@ func startHTTPServer(certFile, keyFile, addr string) (*http.Server, error) {
 
 // ensureImageExists ensures the RabbitMQ image exists, pulling it if necessary.
 func ensureImageExists(ctx context.Context, cli *client.Client, imageName string) error {
-	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	_, err := cli.ImageInspect(ctx, imageName)
 	if err != nil {
-		if !client.IsErrNotFound(err) {
+		if !errdefs.IsNotFound(err) {
 			return fmt.Errorf("failed to inspect image: %w", err)
 		}
 
