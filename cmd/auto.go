@@ -50,6 +50,7 @@ func getRandomPort() (int, error) {
 		return 0, err
 	}
 	defer listener.Close()
+
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
@@ -77,13 +78,16 @@ func (m spinnerModel) Init() tea.Cmd {
 					conn.Close()
 					return spinnerMsg{nil}
 				}
+
 				if !strings.Contains(err.Error(), syscall.ECONNREFUSED.Error()) &&
 					!strings.Contains(err.Error(), syscall.ECONNRESET.Error()) &&
 					err.Error() != io.EOF.Error() {
 					return spinnerMsg{err}
 				}
+
 				time.Sleep(time.Second)
 			}
+
 			return spinnerMsg{errors.New("timeout waiting for RabbitMQ")}
 		},
 	)
@@ -101,13 +105,18 @@ func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		}
+
 		m.quitting = true
+
 		return m, tea.Quit
 	case spinner.TickMsg:
 		var cmd tea.Cmd
+
 		m.spinner, cmd = m.spinner.Update(msg)
+
 		return m, cmd
 	}
+
 	return m, nil
 }
 
@@ -115,6 +124,7 @@ func (m spinnerModel) View() string {
 	if m.quitting {
 		return ""
 	}
+
 	return fmt.Sprintf("\n  %s Waiting for RabbitMQ to start...\n\n", m.spinner.View())
 }
 
@@ -167,6 +177,7 @@ func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 	}
 
 	url := "https://" + httpAddr
+
 	resp, err := client.Get(url)
 	if err != nil {
 		logger.Error("HTTP connection test failed", "error", err)
