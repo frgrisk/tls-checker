@@ -14,6 +14,7 @@ linters:
     - ireturn
     - nlreturn
     - noctx
+    - noinlineerr
     - varnamelen
     - wrapcheck
     - wsl

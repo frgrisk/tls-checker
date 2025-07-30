@@ -64,6 +64,7 @@ func runHTTPClient(rootCAFile, addr string) {
 	}
 
 	url := "https://" + addr
+
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Fatalf("failed to make request: %v", err)
@@ -74,6 +75,7 @@ func runHTTPClient(rootCAFile, addr string) {
 	if err != nil {
 		log.Fatalf("failed to read response body: %v", err) //nolint:gocritic
 	}
+
 	fmt.Printf("Server response: %s\n", body)
 }
 
@@ -97,6 +99,7 @@ func runRabbitMQClient(rootCAFile, addr string) {
 
 	// Connect to RabbitMQ
 	url := "amqps://guest:guest@" + addr
+
 	conn, err := amqp.DialTLS(url, tlsConfig)
 	if err != nil {
 		log.Fatalf("failed to connect to RabbitMQ: %v", err)
