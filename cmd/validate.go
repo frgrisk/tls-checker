@@ -21,7 +21,7 @@ func init() {
 	rootCmd.AddCommand(validateCmd)
 }
 
-func runValidate(cmd *cobra.Command, _ []string) {
+func runValidate(_ *cobra.Command, _ []string) {
 	certFile := viper.GetString("cert")
 	rootCAFile := viper.GetString("ca")
 

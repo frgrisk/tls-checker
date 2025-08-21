@@ -39,7 +39,11 @@ func ValidateRootCAFile(rootCAFile string) error {
 func validateSingleRootCA(cert *x509.Certificate) error {
 	// Check if it's self-signed (root CA property)
 	if !isCertSelfSigned(cert) {
-		return fmt.Errorf("certificate is not self-signed (this appears to be an intermediate CA--not a root CA): Subject=%q, Issuer=%q", cert.Subject, cert.Issuer)
+		return fmt.Errorf(
+			"certificate is not self-signed (this appears to be an intermediate CA--not a root CA): Subject=%q, Issuer=%q",
+			cert.Subject,
+			cert.Issuer,
+		)
 	}
 
 	// Check if it has CA capabilities
@@ -86,7 +90,12 @@ func validateCABundle(certs []*x509.Certificate) error {
 	}
 
 	if rootCount == 0 {
-		return fmt.Errorf("CA bundle contains %d certificates but no valid root CAs (found %d intermediate CAs, %d invalid certificates)", len(certs), intermediateCount, invalidCount)
+		return fmt.Errorf(
+			"CA bundle contains %d certificates but no valid root CAs (found %d intermediate CAs, %d invalid certificates)",
+			len(certs),
+			intermediateCount,
+			invalidCount,
+		)
 	}
 
 	// Bundle is valid - log summary
