@@ -24,6 +24,7 @@ The tool expects the following files:
 - `rootCA.pem`: Root CA certificate for client verification (supports both single certificates and CA bundles)
 
 All certificates should be in PEM format. For CA files, you can use:
+
 - Single root CA certificates
 - CA bundles (multiple certificates in one file, like the Mozilla CA bundle from https://curl.se/ca/cacert.pem)
 - Mixed bundles containing both root and intermediate CAs
@@ -52,12 +53,14 @@ tls-checker validate --cert cert.pem --key key.pem --ca rootCA.pem
 ```
 
 This will:
+
 1. **Verify your root CA is actually a root CA** (not an intermediate CA)
 2. **Support CA bundles** - validates that bundles contain at least one valid root CA
 3. Validate your server certificate
 4. Check the certificate chain relationship
 
 **Examples:**
+
 ```bash
 # Single root CA
 ./tls-checker validate --ca rootCA.pem
