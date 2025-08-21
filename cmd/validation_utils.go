@@ -3,12 +3,13 @@ package cmd
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 )
 
 // ValidateRootCAFile validates that a file contains proper root CA certificate(s)
-// Supports both single certificates and CA bundles
+// Supports both single certificates and CA bundles.
 func ValidateRootCAFile(rootCAFile string) error {
 	certData, err := os.ReadFile(rootCAFile)
 	if err != nil {
@@ -22,7 +23,7 @@ func ValidateRootCAFile(rootCAFile string) error {
 	}
 
 	if len(certs) == 0 {
-		return fmt.Errorf("no certificates found in file")
+		return errors.New("no certificates found in file")
 	}
 
 	// If single certificate, validate it as a root CA
@@ -34,7 +35,7 @@ func ValidateRootCAFile(rootCAFile string) error {
 	return validateCABundle(certs)
 }
 
-// validateSingleRootCA validates a single certificate as a root CA
+// validateSingleRootCA validates a single certificate as a root CA.
 func validateSingleRootCA(cert *x509.Certificate) error {
 	// Check if it's self-signed (root CA property)
 	if !isCertSelfSigned(cert) {
@@ -43,12 +44,12 @@ func validateSingleRootCA(cert *x509.Certificate) error {
 
 	// Check if it has CA capabilities
 	if !cert.IsCA {
-		return fmt.Errorf("certificate does not have CA capabilities (Basic Constraints CA:FALSE)")
+		return errors.New("certificate does not have CA capabilities (Basic Constraints CA:FALSE)")
 	}
 
 	// Check key usage for certificate signing
 	if cert.KeyUsage&x509.KeyUsageCertSign == 0 {
-		return fmt.Errorf("certificate does not have certificate signing capability")
+		return errors.New("certificate does not have certificate signing capability")
 	}
 
 	// Verify self-signature
@@ -59,7 +60,7 @@ func validateSingleRootCA(cert *x509.Certificate) error {
 	return nil
 }
 
-// validateCABundle validates a bundle of certificates
+// validateCABundle validates a bundle of certificates.
 func validateCABundle(certs []*x509.Certificate) error {
 	rootCount := 0
 	intermediateCount := 0
@@ -77,6 +78,7 @@ func validateCABundle(certs []*x509.Certificate) error {
 				invalidCount++
 				continue
 			}
+
 			rootCount++
 		} else {
 			intermediateCount++
@@ -88,7 +90,7 @@ func validateCABundle(certs []*x509.Certificate) error {
 	}
 
 	// Bundle is valid - log summary
-	logger.Info("CA bundle validation passed", 
+	logger.Info("CA bundle validation passed",
 		"total_certificates", len(certs),
 		"root_cas", rootCount,
 		"intermediate_cas", intermediateCount,
@@ -98,9 +100,10 @@ func validateCABundle(certs []*x509.Certificate) error {
 	return nil
 }
 
-// parseAllCertificates parses all certificates from PEM data (handles bundles)
+// parseAllCertificates parses all certificates from PEM data (handles bundles).
 func parseAllCertificates(certData []byte) ([]*x509.Certificate, error) {
 	var certificates []*x509.Certificate
+
 	remaining := certData
 
 	for len(remaining) > 0 {
@@ -118,7 +121,9 @@ func parseAllCertificates(certData []byte) ([]*x509.Certificate, error) {
 		if err != nil {
 			// Log warning but continue parsing other certificates
 			logger.Warn("Failed to parse certificate in bundle", "error", err)
+
 			remaining = rest
+
 			continue
 		}
 
@@ -127,17 +132,17 @@ func parseAllCertificates(certData []byte) ([]*x509.Certificate, error) {
 	}
 
 	if len(certificates) == 0 {
-		return nil, fmt.Errorf("no valid certificates found in PEM data")
+		return nil, errors.New("no valid certificates found in PEM data")
 	}
 
 	return certificates, nil
 }
 
-// parseCertificate parses a single certificate from PEM data
+// parseCertificate parses a single certificate from PEM data.
 func parseCertificate(certData []byte) (*x509.Certificate, error) {
 	block, _ := pem.Decode(certData)
 	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("failed to decode PEM certificate block")
+		return nil, errors.New("failed to decode PEM certificate block")
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
@@ -148,7 +153,7 @@ func parseCertificate(certData []byte) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// isCertSelfSigned checks if a certificate is self-signed (subject equals issuer)
+// isCertSelfSigned checks if a certificate is self-signed (subject equals issuer).
 func isCertSelfSigned(cert *x509.Certificate) bool {
 	return cert.Subject.String() == cert.Issuer.String()
 }

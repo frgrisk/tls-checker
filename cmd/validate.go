@@ -32,6 +32,7 @@ func runValidate(cmd *cobra.Command, _ []string) {
 		logger.Error("Root CA validation failed", "file", rootCAFile, "error", err)
 		return
 	}
+
 	logger.Info("✅ Root CA validation passed", "file", rootCAFile)
 
 	// Validate server certificate
@@ -39,6 +40,7 @@ func runValidate(cmd *cobra.Command, _ []string) {
 		logger.Error("Server certificate validation failed", "file", certFile, "error", err)
 		return
 	}
+
 	logger.Info("✅ Server certificate validation passed", "file", certFile)
 
 	// Validate certificate chain relationship
@@ -46,17 +48,18 @@ func runValidate(cmd *cobra.Command, _ []string) {
 		logger.Error("Certificate chain validation failed", "error", err)
 		return
 	}
+
 	logger.Info("✅ Certificate chain validation passed")
 
 	logger.Info("🎉 All validations passed successfully!")
 }
 
-// validateRootCA checks if the provided certificate is actually a root CA
+// validateRootCA checks if the provided certificate is actually a root CA.
 func validateRootCA(rootCAFile string) error {
 	return ValidateRootCAFile(rootCAFile)
 }
 
-// validateServerCert checks if the server certificate is valid
+// validateServerCert checks if the server certificate is valid.
 func validateServerCert(certFile string) error {
 	certData, err := os.ReadFile(certFile)
 	if err != nil {
@@ -77,14 +80,14 @@ func validateServerCert(certFile string) error {
 	if len(cert.ExtKeyUsage) > 0 {
 		hasServerAuth := slices.Contains(cert.ExtKeyUsage, x509.ExtKeyUsageServerAuth)
 		if !hasServerAuth {
-			return fmt.Errorf("certificate does not have server authentication capability")
+			return errors.New("certificate does not have server authentication capability")
 		}
 	}
 
 	return nil
 }
 
-// validateCertificateChain checks if the server certificate can be validated against the root CA(s)
+// validateCertificateChain checks if the server certificate can be validated against the root CA(s).
 func validateCertificateChain(certFile, rootCAFile string) error {
 	// Load server certificate
 	certData, err := os.ReadFile(certFile)
@@ -127,13 +130,15 @@ func validateCertificateChain(certFile, rootCAFile string) error {
 		if errors.As(err, &unknownAuthorityError) {
 			return fmt.Errorf("certificate chain verification failed (this may indicate a missing intermediate CA): %w", err)
 		}
+
 		return fmt.Errorf("certificate chain verification failed: %w", err)
 	}
 
 	if len(chains) == 0 {
-		return fmt.Errorf("no valid certificate chains found")
+		return errors.New("no valid certificate chains found")
 	}
 
 	logger.Info("Certificate chain verified successfully", "chain_length", len(chains[0]))
+
 	return nil
 }
