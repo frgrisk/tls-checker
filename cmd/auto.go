@@ -134,6 +134,12 @@ func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 	rootCAFile := viper.GetString("ca")
 	host, _ := cmd.Flags().GetString("host")
 
+	// Validate root CA first
+	if err := ValidateRootCAFile(rootCAFile); err != nil {
+		logger.Warn("⚠️  Root CA validation failed", "file", rootCAFile, "error", err)
+		logger.Warn("Proceeding anyway, but this may indicate a configuration issue")
+	}
+
 	// Load root CA for client connections
 	rootCA, err := os.ReadFile(rootCAFile)
 	if err != nil {

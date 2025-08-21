@@ -4,6 +4,9 @@ A command-line tool for testing and validating TLS certificates, private keys, a
 
 ## Features
 
+- **Certificate Validation**: Comprehensive validation of certificate files and configurations
+- **Root CA Detection**: Automatically detects and warns about intermediate CAs masquerading as root CAs
+- **CA Bundle Support**: Handles both single certificates and CA bundles (like curl.se/ca/cacert.pem)
 - Validate TLS certificate chains and trust relationships
 - Test certificate/key pairs against HTTP and RabbitMQ servers
 - Verify root CA trust configuration
@@ -18,9 +21,12 @@ The tool expects the following files:
 
 - `cert.pem`: Server certificate
 - `key.pem`: Private key for the server certificate
-- `rootCA.pem`: Root CA certificate for client verification
+- `rootCA.pem`: Root CA certificate for client verification (supports both single certificates and CA bundles)
 
-All certificates should be in PEM format.
+All certificates should be in PEM format. For CA files, you can use:
+- Single root CA certificates
+- CA bundles (multiple certificates in one file, like the Mozilla CA bundle from https://curl.se/ca/cacert.pem)
+- Mixed bundles containing both root and intermediate CAs
 
 ## Installation
 
@@ -37,6 +43,32 @@ go install github.com/frgrisk/tls-checker@latest
 
 ## Usage
 
+### Certificate Validation (Recommended First Step)
+
+Before testing connections, validate your certificate configuration:
+
+```bash
+tls-checker validate --cert cert.pem --key key.pem --ca rootCA.pem
+```
+
+This will:
+1. **Verify your root CA is actually a root CA** (not an intermediate CA)
+2. **Support CA bundles** - validates that bundles contain at least one valid root CA
+3. Validate your server certificate
+4. Check the certificate chain relationship
+
+**Examples:**
+```bash
+# Single root CA
+./tls-checker validate --ca rootCA.pem
+
+# CA bundle (like Mozilla's)
+./tls-checker validate --ca cacert.pem
+
+# Mixed bundle (root + intermediate CAs)
+./tls-checker validate --ca mixed-bundle.pem
+```
+
 ### Auto Mode (Recommended)
 
 Automatically test both HTTP and RabbitMQ TLS connections with random ports:
@@ -47,9 +79,10 @@ tls-checker auto --cert cert.pem --key key.pem --ca rootCA.pem --host localhost
 
 This will:
 
-1. Start an HTTPS server on a random port and test the connection
-2. Start a RabbitMQ server with TLS on random ports and test the connection
-3. Clean up all servers after testing
+1. **Validate certificates first** (with warnings for misconfigurations)
+2. Start an HTTPS server on a random port and test the connection
+3. Start a RabbitMQ server with TLS on random ports and test the connection
+4. Clean up all servers after testing
 
 ### Manual Server Modes
 
@@ -76,6 +109,8 @@ tls-checker client --ca rootCA.pem --addr localhost:8443
 ```bash
 tls-checker client --rabbitmq --ca rootCA.pem --addr localhost:5671
 ```
+
+**Note**: Client commands automatically validate the root CA and will display warnings if an intermediate CA is provided instead of a root CA.
 
 ## Configuration
 
