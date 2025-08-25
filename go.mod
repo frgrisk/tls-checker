@@ -5,9 +5,7 @@ go 1.24.0
 toolchain go1.24.3
 
 require (
-	github.com/charmbracelet/bubbles v0.21.0
-	github.com/charmbracelet/bubbletea v1.3.6
-	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/charmbracelet/huh/spinner v0.0.0-20250818142555-c41a69ba6443
 	github.com/charmbracelet/log v0.4.2
 	github.com/containerd/errdefs v1.0.0
 	github.com/docker/docker v28.0.4+incompatible
@@ -20,7 +18,10 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/charmbracelet/bubbles v0.21.0 // indirect
+	github.com/charmbracelet/bubbletea v1.3.6 // indirect
 	github.com/charmbracelet/colorprofile v0.3.2 // indirect
+	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.10.1 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect

@@ -10,6 +10,8 @@ jobs:
   e2e-tests:
     name: E2E Certificate Tests
     runs-on: ubuntu-latest
+    env:
+      ACCESSIBLE: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
