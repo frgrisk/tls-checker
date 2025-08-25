@@ -125,6 +125,7 @@ func validateCertificateChain(certFile, rootCAFile string) error {
 
 	// Create intermediate pool if there are intermediate certificates in the chain
 	intermediatePool := x509.NewCertPool()
+
 	if len(chainCerts) > 1 {
 		for i := 1; i < len(chainCerts); i++ {
 			intermediatePool.AddCert(chainCerts[i])
