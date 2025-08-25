@@ -125,7 +125,6 @@ func ensureImageExists(ctx context.Context, cli *client.Client, imageName string
 				return nil
 			}).
 			Run()
-
 		if err != nil {
 			return fmt.Errorf("failed to pull RabbitMQ image: %w", err)
 		}
@@ -266,7 +265,6 @@ func cleanupRabbitMQ(containerID string) {
 			return nil
 		}).
 		Run()
-
 	if err != nil {
 		logger.Error("Failed during cleanup", "error", err)
 	}

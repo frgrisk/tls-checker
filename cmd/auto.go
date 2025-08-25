@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-
 var autoCmd = &cobra.Command{
 	Use:   "auto",
 	Short: "Automatically test both HTTP and RabbitMQ TLS connections",
@@ -70,7 +69,6 @@ func waitForRabbitMQ(addr string, tlsConfig *tls.Config) error {
 		}).
 		Run()
 }
-
 
 func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 	certFile := viper.GetString("cert")
