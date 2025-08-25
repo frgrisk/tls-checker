@@ -75,8 +75,9 @@ jobs:
       - name: Test 2 - Validate with root CA only (should fail)
         run: |
           echo "Testing validate command with root CA only (missing intermediate)..."
+          EXIT_CODE=0
           ./tls-checker validate --ca testdata/root-ca.crt --cert testdata/server.crt --key testdata/server.key || EXIT_CODE=$?
-          if [ "$EXIT_CODE" -ne 0 ]; then
+          if [ $EXIT_CODE -ne 0 ]; then
             echo "✅ Test 2 passed: Validate command correctly failed with incomplete chain"
           else
             echo "❌ Test 2 failed: Validate command should have failed due to missing intermediate"
