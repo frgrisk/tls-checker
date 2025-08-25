@@ -29,3 +29,7 @@ openssl x509 -req -in server.csr \
   -CA intermediate-ca.crt -CAkey intermediate-ca.key -CAcreateserial \
   -out server.crt -days 3650 \
   -extfile <(echo "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:::1")
+
+# Set proper permissions for all certificates (readable by all, keys only by owner)
+chmod 644 *.crt
+chmod 600 *.key

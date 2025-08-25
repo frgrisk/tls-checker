@@ -160,6 +160,11 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 
 	tmpConfigFile.Close()
 
+	// Set proper permissions for the config file so RabbitMQ can read it
+	if err := os.Chmod(tmpConfigFile.Name(), 0644); err != nil {
+		return "", fmt.Errorf("failed to set config file permissions: %w", err)
+	}
+
 	return tmpConfigFile.Name(), nil
 }
 
@@ -197,6 +202,14 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 	keyPath, err := filepath.Abs(keyFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path for key: %w", err)
+	}
+
+	// Ensure certificate files have proper permissions
+	if err := os.Chmod(certPath, 0644); err != nil {
+		logger.Warn("Failed to set cert file permissions", "error", err)
+	}
+	if err := os.Chmod(keyPath, 0644); err != nil {
+		logger.Warn("Failed to set key file permissions", "error", err)
 	}
 
 	configPath, err := createRabbitMQConfig(amqpPort, mgmtPortTLS)
