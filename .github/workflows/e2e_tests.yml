@@ -40,7 +40,7 @@ jobs:
       - name: Test 1 - Auto with complete chain (should succeed)
         run: |
           echo "Testing auto command with complete certificate chain..."
-          ./tls-checker auto --ca testdata/ca-chain.crt --cert testdata/server.crt --key testdata/server.key --host localhost
+          ./tls-checker auto --ca testdata/ca-chain.crt --cert testdata/server.crt --key testdata/server.key --host 127.0.0.1
           if [ $? -eq 0 ]; then
             echo "✅ Test 1 passed: Auto command succeeded with complete chain"
           else
@@ -64,7 +64,7 @@ jobs:
           echo "Testing auto command with intermediate CA only..."
           # This test expects warnings in the output but the command may still succeed
           # We'll capture both stdout and stderr to check for warning messages
-          OUTPUT=$(./tls-checker auto --ca testdata/intermediate-ca.crt --cert testdata/server.crt --key testdata/server.key --host localhost 2>&1)
+          OUTPUT=$(./tls-checker auto --ca testdata/intermediate-ca.crt --cert testdata/server.crt --key testdata/server.key --host 127.0.0.1 2>&1)
           EXIT_CODE=$?
           echo "$OUTPUT"
 
