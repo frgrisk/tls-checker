@@ -49,12 +49,22 @@ func waitForRabbitMQ(addr string, tlsConfig *tls.Config) error {
 		Accessible(os.Getenv("ACCESSIBLE") != "").
 		ActionWithErr(func(context.Context) error {
 			// Try to connect every second until successful or timeout
+			// Use longer timeout in CI environment
+			timeout := 30 * time.Second
+			if os.Getenv("ACCESSIBLE") != "" {
+				timeout = 60 * time.Second
+			}
 			start := time.Now()
-			for time.Since(start) < 30*time.Second {
+			for time.Since(start) < timeout {
 				conn, err := amqp.DialTLS("amqps://guest:guest@"+addr, tlsConfig)
 				if err == nil {
 					conn.Close()
 					return nil
+				}
+
+				// Log the error for debugging in CI
+				if os.Getenv("ACCESSIBLE") != "" {
+					fmt.Printf("RabbitMQ connection attempt failed: %v\n", err)
 				}
 
 				if !strings.Contains(err.Error(), syscall.ECONNREFUSED.Error()) &&

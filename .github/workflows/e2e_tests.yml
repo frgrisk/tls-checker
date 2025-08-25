@@ -24,6 +24,11 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
+      - name: Verify Docker is running
+        run: |
+          docker version
+          docker info
+
       - name: Install dependencies
         run: go mod download
 

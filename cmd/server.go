@@ -173,6 +173,16 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 	}
 	defer cli.Close()
 
+	// Check Docker connectivity in CI
+	if os.Getenv("ACCESSIBLE") != "" {
+		info, err := cli.Info(ctx)
+		if err != nil {
+			fmt.Printf("Docker info error: %v\n", err)
+		} else {
+			fmt.Printf("Docker info: Server Version: %s, OS: %s\n", info.ServerVersion, info.OperatingSystem)
+		}
+	}
+
 	imageName := "rabbitmq:3-management"
 	if err := ensureImageExists(ctx, cli, imageName); err != nil {
 		return "", err
@@ -236,6 +246,25 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 		"management_ui", fmt.Sprintf("https://localhost:%d", mgmtPortTLS),
 		"amqps", fmt.Sprintf("amqps://localhost:%d", amqpPort),
 	)
+
+	// In CI environment, print container logs for debugging
+	if os.Getenv("ACCESSIBLE") != "" {
+		go func() {
+			time.Sleep(5 * time.Second)
+			logs, err := cli.ContainerLogs(ctx, resp.ID, container.LogsOptions{
+				ShowStdout: true,
+				ShowStderr: true,
+				Tail:       "50",
+			})
+			if err == nil {
+				defer logs.Close()
+				logBytes, _ := io.ReadAll(logs)
+				if len(logBytes) > 0 {
+					fmt.Printf("=== RabbitMQ Container Logs ===\n%s\n=== End Logs ===\n", string(logBytes))
+				}
+			}
+		}()
+	}
 
 	return resp.ID, nil
 }
