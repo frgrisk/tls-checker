@@ -29,24 +29,21 @@ func runValidate(_ *cobra.Command, _ []string) {
 
 	// Validate root CA
 	if err := validateRootCA(rootCAFile); err != nil {
-		logger.Error("Root CA validation failed", "file", rootCAFile, "error", err)
-		os.Exit(1)
+		logger.Fatal("Root CA validation failed", "file", rootCAFile, "error", err)
 	}
 
 	logger.Info("✅ Root CA validation passed", "file", rootCAFile)
 
 	// Validate server certificate
 	if err := validateServerCert(certFile); err != nil {
-		logger.Error("Server certificate validation failed", "file", certFile, "error", err)
-		os.Exit(1)
+		logger.Fatal("Server certificate validation failed", "file", certFile, "error", err)
 	}
 
 	logger.Info("✅ Server certificate validation passed", "file", certFile)
 
 	// Validate certificate chain relationship
 	if err := validateCertificateChain(certFile, rootCAFile); err != nil {
-		logger.Error("Certificate chain validation failed", "error", err)
-		os.Exit(1)
+		logger.Fatal("Certificate chain validation failed", "error", err)
 	}
 
 	logger.Info("✅ Certificate chain validation passed")

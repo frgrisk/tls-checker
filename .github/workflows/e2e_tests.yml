@@ -24,11 +24,6 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Verify Docker is running
-        run: |
-          docker version
-          docker info
-
       - name: Install dependencies
         run: go mod download
 
@@ -41,25 +36,6 @@ jobs:
 
       - name: List generated certificates
         run: ls -la testdata/*.crt testdata/*.key
-
-      - name: Debug hostname resolution
-        run: |
-          echo "=== Hostname resolution debugging ==="
-          echo "Checking /etc/hosts:"
-          cat /etc/hosts
-          echo ""
-          echo "Testing localhost resolution:"
-          ping -c 1 localhost || true
-          echo ""
-          echo "Testing 127.0.0.1:"
-          ping -c 1 127.0.0.1 || true
-          echo ""
-          echo "getent hosts localhost:"
-          getent hosts localhost || true
-          echo ""
-          echo "nslookup localhost:"
-          nslookup localhost || true
-          echo "=== End debugging ==="
 
       - name: Test 1 - Auto with complete chain (should succeed)
         run: |

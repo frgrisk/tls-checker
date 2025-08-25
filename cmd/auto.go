@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-
 var autoCmd = &cobra.Command{
 	Use:   "auto",
 	Short: "Automatically test both HTTP and RabbitMQ TLS connections",
@@ -49,22 +48,12 @@ func waitForRabbitMQ(addr string, tlsConfig *tls.Config) error {
 		Accessible(os.Getenv("ACCESSIBLE") != "").
 		ActionWithErr(func(context.Context) error {
 			// Try to connect every second until successful or timeout
-			// Use longer timeout in CI environment
-			timeout := 30 * time.Second
-			if os.Getenv("ACCESSIBLE") != "" {
-				timeout = 60 * time.Second
-			}
 			start := time.Now()
-			for time.Since(start) < timeout {
+			for time.Since(start) < 30*time.Second {
 				conn, err := amqp.DialTLS("amqps://guest:guest@"+addr, tlsConfig)
 				if err == nil {
 					conn.Close()
 					return nil
-				}
-
-				// Log the error for debugging in CI
-				if os.Getenv("ACCESSIBLE") != "" {
-					fmt.Printf("RabbitMQ connection attempt failed: %v\n", err)
 				}
 
 				if !strings.Contains(err.Error(), syscall.ECONNREFUSED.Error()) &&
@@ -80,7 +69,6 @@ func waitForRabbitMQ(addr string, tlsConfig *tls.Config) error {
 		}).
 		Run()
 }
-
 
 func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 	certFile := viper.GetString("cert")

@@ -125,7 +125,6 @@ func ensureImageExists(ctx context.Context, cli *client.Client, imageName string
 				return nil
 			}).
 			Run()
-
 		if err != nil {
 			return fmt.Errorf("failed to pull RabbitMQ image: %w", err)
 		}
@@ -161,7 +160,8 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 	tmpConfigFile.Close()
 
 	// Set proper permissions for the config file so RabbitMQ can read it
-	if err := os.Chmod(tmpConfigFile.Name(), 0644); err != nil {
+	const readableFilePerms = 0o644
+	if err := os.Chmod(tmpConfigFile.Name(), readableFilePerms); err != nil {
 		return "", fmt.Errorf("failed to set config file permissions: %w", err)
 	}
 
@@ -177,16 +177,6 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 		return "", fmt.Errorf("failed to create Docker client: %w", err)
 	}
 	defer cli.Close()
-
-	// Check Docker connectivity in CI
-	if os.Getenv("ACCESSIBLE") != "" {
-		info, err := cli.Info(ctx)
-		if err != nil {
-			fmt.Printf("Docker info error: %v\n", err)
-		} else {
-			fmt.Printf("Docker info: Server Version: %s, OS: %s\n", info.ServerVersion, info.OperatingSystem)
-		}
-	}
 
 	imageName := "rabbitmq:3-management"
 	if err := ensureImageExists(ctx, cli, imageName); err != nil {
@@ -205,10 +195,12 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 	}
 
 	// Ensure certificate files have proper permissions
-	if err := os.Chmod(certPath, 0644); err != nil {
+	const certFilePerms = 0o644
+	if err := os.Chmod(certPath, certFilePerms); err != nil {
 		logger.Warn("Failed to set cert file permissions", "error", err)
 	}
-	if err := os.Chmod(keyPath, 0644); err != nil {
+
+	if err := os.Chmod(keyPath, certFilePerms); err != nil {
 		logger.Warn("Failed to set key file permissions", "error", err)
 	}
 
@@ -260,25 +252,6 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 		"amqps", fmt.Sprintf("amqps://localhost:%d", amqpPort),
 	)
 
-	// In CI environment, print container logs for debugging
-	if os.Getenv("ACCESSIBLE") != "" {
-		go func() {
-			time.Sleep(5 * time.Second)
-			logs, err := cli.ContainerLogs(ctx, resp.ID, container.LogsOptions{
-				ShowStdout: true,
-				ShowStderr: true,
-				Tail:       "50",
-			})
-			if err == nil {
-				defer logs.Close()
-				logBytes, _ := io.ReadAll(logs)
-				if len(logBytes) > 0 {
-					fmt.Printf("=== RabbitMQ Container Logs ===\n%s\n=== End Logs ===\n", string(logBytes))
-				}
-			}
-		}()
-	}
-
 	return resp.ID, nil
 }
 
@@ -308,7 +281,6 @@ func cleanupRabbitMQ(containerID string) {
 			return nil
 		}).
 		Run()
-
 	if err != nil {
 		logger.Error("Failed during cleanup", "error", err)
 	}
