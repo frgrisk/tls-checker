@@ -86,16 +86,24 @@ func validateServerCert(certFile string) error {
 
 // validateCertificateChain checks if the server certificate can be validated against the root CA(s).
 func validateCertificateChain(certFile, rootCAFile string) error {
-	// Load server certificate
+	// Load certificate chain (may contain server cert + intermediates)
 	certData, err := os.ReadFile(certFile)
 	if err != nil {
-		return fmt.Errorf("failed to read server certificate: %w", err)
+		return fmt.Errorf("failed to read certificate file: %w", err)
 	}
 
-	serverCert, err := parseCertificate(certData)
+	// Parse all certificates from the chain file
+	chainCerts, err := parseAllCertificates(certData)
 	if err != nil {
-		return fmt.Errorf("failed to parse server certificate: %w", err)
+		return fmt.Errorf("failed to parse certificate chain: %w", err)
 	}
+
+	if len(chainCerts) == 0 {
+		return errors.New("no certificates found in certificate file")
+	}
+
+	// First certificate should be the server certificate
+	serverCert := chainCerts[0]
 
 	// Load root CA(s) - handle both single certificates and bundles
 	rootCAData, err := os.ReadFile(rootCAFile)
@@ -115,9 +123,19 @@ func validateCertificateChain(certFile, rootCAFile string) error {
 		rootCAPool.AddCert(cert)
 	}
 
+	// Create intermediate pool if there are intermediate certificates in the chain
+	intermediatePool := x509.NewCertPool()
+	if len(chainCerts) > 1 {
+		for i := 1; i < len(chainCerts); i++ {
+			intermediatePool.AddCert(chainCerts[i])
+			logger.Debug("Added intermediate certificate", "subject", chainCerts[i].Subject.String())
+		}
+	}
+
 	// Verify certificate chain
 	opts := x509.VerifyOptions{
-		Roots: rootCAPool,
+		Roots:         rootCAPool,
+		Intermediates: intermediatePool,
 	}
 
 	chains, err := serverCert.Verify(opts)
