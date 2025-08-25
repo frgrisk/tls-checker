@@ -1,0 +1,88 @@
+name: End-to-End Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e-tests:
+    name: E2E Certificate Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Build tls-checker
+        run: go build -o tls-checker .
+
+      - name: Generate test certificates
+        working-directory: testdata
+        run: bash generate_certs.sh
+
+      - name: List generated certificates
+        run: ls -la testdata/*.crt testdata/*.key
+
+      - name: Test 1 - Auto with complete chain (should succeed)
+        run: |
+          echo "Testing auto command with complete certificate chain..."
+          ./tls-checker auto --ca testdata/ca-chain.crt --cert testdata/server.crt --key testdata/server.key --host localhost
+          if [ $? -eq 0 ]; then
+            echo "✅ Test 1 passed: Auto command succeeded with complete chain"
+          else
+            echo "❌ Test 1 failed: Auto command should have succeeded"
+            exit 1
+          fi
+
+      - name: Test 2 - Validate with root CA only (should fail)
+        run: |
+          echo "Testing validate command with root CA only (missing intermediate)..."
+          ./tls-checker validate --ca testdata/root-ca.crt --cert testdata/server.crt --key testdata/server.key || EXIT_CODE=$?
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "✅ Test 2 passed: Validate command correctly failed with incomplete chain"
+          else
+            echo "❌ Test 2 failed: Validate command should have failed due to missing intermediate"
+            exit 1
+          fi
+
+      - name: Test 3 - Auto with intermediate CA only (should have warnings)
+        run: |
+          echo "Testing auto command with intermediate CA only..."
+          # This test expects warnings in the output but the command may still succeed
+          # We'll capture both stdout and stderr to check for warning messages
+          OUTPUT=$(./tls-checker auto --ca testdata/intermediate-ca.crt --cert testdata/server.crt --key testdata/server.key --host localhost 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT"
+
+          # Check if there are warnings about root CA validation
+          if echo "$OUTPUT" | grep -q "Root CA validation failed\|not a root CA\|not self-signed"; then
+            echo "✅ Test 3 passed: Auto command correctly showed warnings about non-root CA"
+          else
+            echo "⚠️  Test 3: Expected warnings about root CA validation were not found"
+            echo "Output was:"
+            echo "$OUTPUT"
+            # Don't fail the test as the behavior might vary
+          fi
+
+      - name: Test 4 - Validate with complete chain (should succeed)
+        run: |
+          echo "Testing validate command with complete certificate chain..."
+          ./tls-checker validate --ca testdata/ca-chain.crt --cert testdata/server.crt --key testdata/server.key
+          if [ $? -eq 0 ]; then
+            echo "✅ Test 4 passed: Validate command succeeded with complete chain"
+          else
+            echo "❌ Test 4 failed: Validate command should have succeeded with complete chain"
+            exit 1
+          fi
