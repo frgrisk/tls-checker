@@ -40,6 +40,12 @@ func runClient(cmd *cobra.Command, _ []string) {
 }
 
 func runHTTPClient(rootCAFile, addr string) {
+	// Validate root CA first
+	if err := ValidateRootCAFile(rootCAFile); err != nil {
+		logger.Warn("⚠️  Root CA validation failed", "file", rootCAFile, "error", err)
+		logger.Warn("Proceeding anyway, but this may indicate a configuration issue")
+	}
+
 	// Load root CA certificate
 	rootCA, err := os.ReadFile(rootCAFile)
 	if err != nil {
@@ -80,6 +86,12 @@ func runHTTPClient(rootCAFile, addr string) {
 }
 
 func runRabbitMQClient(rootCAFile, addr string) {
+	// Validate root CA first
+	if err := ValidateRootCAFile(rootCAFile); err != nil {
+		logger.Warn("⚠️  Root CA validation failed", "file", rootCAFile, "error", err)
+		logger.Warn("Proceeding anyway, but this may indicate a configuration issue")
+	}
+
 	// Load root CA certificate
 	rootCA, err := os.ReadFile(rootCAFile)
 	if err != nil {

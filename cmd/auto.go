@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -13,24 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/huh/spinner"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-var spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
-
-type spinnerMsg struct{ err error }
-
-type spinnerModel struct {
-	spinner  spinner.Model
-	addr     string
-	tls      *tls.Config
-	quitting bool
-}
 
 var autoCmd = &cobra.Command{
 	Use:   "auto",
@@ -54,78 +42,32 @@ func getRandomPort() (int, error) {
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
-func waitForRabbitMQ(addr string, tlsConfig *tls.Config) tea.Model {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = spinnerStyle
-
-	return spinnerModel{
-		spinner: s,
-		addr:    addr,
-		tls:     tlsConfig,
-	}
-}
-
-func (m spinnerModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.spinner.Tick,
-		func() tea.Msg {
+func waitForRabbitMQ(addr string, tlsConfig *tls.Config) error {
+	return spinner.New().
+		Title("Waiting for RabbitMQ to start...").
+		Accessible(os.Getenv("ACCESSIBLE") != "").
+		ActionWithErr(func(context.Context) error {
 			// Try to connect every second until successful or timeout
 			start := time.Now()
 			for time.Since(start) < 30*time.Second {
-				conn, err := amqp.DialTLS("amqps://guest:guest@"+m.addr, m.tls)
+				conn, err := amqp.DialTLS("amqps://guest:guest@"+addr, tlsConfig)
 				if err == nil {
 					conn.Close()
-					return spinnerMsg{nil}
+					return nil
 				}
 
 				if !strings.Contains(err.Error(), syscall.ECONNREFUSED.Error()) &&
 					!strings.Contains(err.Error(), syscall.ECONNRESET.Error()) &&
 					err.Error() != io.EOF.Error() {
-					return spinnerMsg{err}
+					return err
 				}
 
 				time.Sleep(time.Second)
 			}
 
-			return spinnerMsg{errors.New("timeout waiting for RabbitMQ")}
-		},
-	)
-}
-
-func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "q" {
-			m.quitting = true
-			return m, tea.Quit
-		}
-	case spinnerMsg:
-		if msg.err != nil {
-			m.quitting = true
-			return m, tea.Quit
-		}
-
-		m.quitting = true
-
-		return m, tea.Quit
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-
-		m.spinner, cmd = m.spinner.Update(msg)
-
-		return m, cmd
-	}
-
-	return m, nil
-}
-
-func (m spinnerModel) View() string {
-	if m.quitting {
-		return ""
-	}
-
-	return fmt.Sprintf("\n  %s Waiting for RabbitMQ to start...\n\n", m.spinner.View())
+			return errors.New("timeout waiting for RabbitMQ")
+		}).
+		Run()
 }
 
 func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
@@ -133,6 +75,12 @@ func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 	keyFile := viper.GetString("key")
 	rootCAFile := viper.GetString("ca")
 	host, _ := cmd.Flags().GetString("host")
+
+	// Validate root CA first
+	if err := ValidateRootCAFile(rootCAFile); err != nil {
+		logger.Warn("⚠️  Root CA validation failed", "file", rootCAFile, "error", err)
+		logger.Warn("Proceeding anyway, but this may indicate a configuration issue")
+	}
 
 	// Load root CA for client connections
 	rootCA, err := os.ReadFile(rootCAFile)
@@ -220,8 +168,7 @@ func runAuto(cmd *cobra.Command, _ []string) { //nolint:cyclop
 		InsecureSkipVerify: false,
 	}
 
-	p := tea.NewProgram(waitForRabbitMQ(amqpAddr, amqpTLSConfig))
-	if _, err := p.Run(); err != nil {
+	if err := waitForRabbitMQ(amqpAddr, amqpTLSConfig); err != nil {
 		logger.Fatal("Failed waiting for RabbitMQ", "error", err)
 	}
 

@@ -14,9 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -113,18 +111,21 @@ func ensureImageExists(ctx context.Context, cli *client.Client, imageName string
 		}
 
 		// Image not found, pull it with spinner
-		s := spinner.New()
-		s.Spinner = spinner.Dot
-		s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+		err := spinner.New().
+			Title("Pulling RabbitMQ image...").
+			Accessible(os.Getenv("ACCESSIBLE") != "").
+			ActionWithErr(func(context.Context) error {
+				reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
+				if err != nil {
+					return err
+				}
+				defer reader.Close()
 
-		p := tea.NewProgram(pullSpinnerModel{
-			spinner: s,
-			client:  cli,
-			ctx:     ctx,
-			image:   imageName,
-		})
-
-		if _, err := p.Run(); err != nil {
+				_, _ = io.Copy(io.Discard, reader)
+				return nil
+			}).
+			Run()
+		if err != nil {
 			return fmt.Errorf("failed to pull RabbitMQ image: %w", err)
 		}
 	}
@@ -158,6 +159,12 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 
 	tmpConfigFile.Close()
 
+	// Set proper permissions for the config file so RabbitMQ can read it
+	const readableFilePerms = 0o644
+	if err := os.Chmod(tmpConfigFile.Name(), readableFilePerms); err != nil {
+		return "", fmt.Errorf("failed to set config file permissions: %w", err)
+	}
+
 	return tmpConfigFile.Name(), nil
 }
 
@@ -185,6 +192,16 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 	keyPath, err := filepath.Abs(keyFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path for key: %w", err)
+	}
+
+	// Ensure certificate files have proper permissions
+	const certFilePerms = 0o644
+	if err := os.Chmod(certPath, certFilePerms); err != nil {
+		logger.Warn("Failed to set cert file permissions", "error", err)
+	}
+
+	if err := os.Chmod(keyPath, certFilePerms); err != nil {
+		logger.Warn("Failed to set key file permissions", "error", err)
 	}
 
 	configPath, err := createRabbitMQConfig(amqpPort, mgmtPortTLS)
@@ -249,141 +266,22 @@ func cleanupRabbitMQ(containerID string) {
 	defer cli.Close()
 
 	// Create and run cleanup spinner
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+	err = spinner.New().
+		Title("Cleaning up RabbitMQ container...").
+		Accessible(os.Getenv("ACCESSIBLE") != "").
+		ActionWithErr(func(context.Context) error {
+			timeout := 10
+			if err := cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+				return err
+			}
 
-	p := tea.NewProgram(cleanupSpinnerModel{
-		spinner:     s,
-		containerID: containerID,
-		client:      cli,
-		ctx:         ctx,
-	})
-
-	if _, err := p.Run(); err != nil {
+			if err := cli.ContainerRemove(ctx, containerID, container.RemoveOptions{}); err != nil {
+				return err
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
 		logger.Error("Failed during cleanup", "error", err)
 	}
-}
-
-type cleanupSpinnerModel struct {
-	spinner     spinner.Model
-	containerID string
-	client      *client.Client
-	ctx         context.Context
-	quitting    bool
-}
-
-type cleanupMsg struct{ err error }
-
-func (m cleanupSpinnerModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.spinner.Tick,
-		func() tea.Msg {
-			timeout := 10
-			if err := m.client.ContainerStop(m.ctx, m.containerID, container.StopOptions{Timeout: &timeout}); err != nil {
-				return cleanupMsg{err}
-			}
-
-			if err := m.client.ContainerRemove(m.ctx, m.containerID, container.RemoveOptions{}); err != nil {
-				return cleanupMsg{err}
-			}
-
-			return cleanupMsg{nil}
-		},
-	)
-}
-
-func (m cleanupSpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "q" {
-			m.quitting = true
-			return m, tea.Quit
-		}
-	case cleanupMsg:
-		if msg.err != nil {
-			logger.Error("Cleanup failed", "error", msg.err)
-		}
-
-		m.quitting = true
-
-		return m, tea.Quit
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-
-		m.spinner, cmd = m.spinner.Update(msg)
-
-		return m, cmd
-	}
-
-	return m, nil
-}
-
-func (m cleanupSpinnerModel) View() string {
-	if m.quitting {
-		return ""
-	}
-
-	return fmt.Sprintf("\n  %s Cleaning up RabbitMQ container...\n\n", m.spinner.View())
-}
-
-type pullSpinnerModel struct {
-	spinner  spinner.Model
-	client   *client.Client
-	ctx      context.Context
-	image    string
-	quitting bool
-}
-
-type pullMsg struct{ err error }
-
-func (m pullSpinnerModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.spinner.Tick,
-		func() tea.Msg {
-			reader, err := m.client.ImagePull(m.ctx, m.image, image.PullOptions{})
-			if err != nil {
-				return pullMsg{err}
-			}
-			defer reader.Close()
-
-			_, _ = io.Copy(io.Discard, reader)
-
-			return pullMsg{nil}
-		},
-	)
-}
-
-func (m pullSpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "q" {
-			m.quitting = true
-			return m, tea.Quit
-		}
-	case pullMsg:
-		if msg.err != nil {
-			logger.Error("Image pull failed", "error", msg.err)
-		}
-
-		m.quitting = true
-
-		return m, tea.Quit
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-
-		m.spinner, cmd = m.spinner.Update(msg)
-
-		return m, cmd
-	}
-
-	return m, nil
-}
-
-func (m pullSpinnerModel) View() string {
-	if m.quitting {
-		return ""
-	}
-
-	return fmt.Sprintf("\n  %s Pulling RabbitMQ image...\n\n", m.spinner.View())
 }
