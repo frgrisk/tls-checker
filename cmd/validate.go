@@ -30,7 +30,7 @@ func runValidate(_ *cobra.Command, _ []string) {
 	// Validate root CA
 	if err := validateRootCA(rootCAFile); err != nil {
 		logger.Error("Root CA validation failed", "file", rootCAFile, "error", err)
-		return
+		os.Exit(1)
 	}
 
 	logger.Info("✅ Root CA validation passed", "file", rootCAFile)
@@ -38,7 +38,7 @@ func runValidate(_ *cobra.Command, _ []string) {
 	// Validate server certificate
 	if err := validateServerCert(certFile); err != nil {
 		logger.Error("Server certificate validation failed", "file", certFile, "error", err)
-		return
+		os.Exit(1)
 	}
 
 	logger.Info("✅ Server certificate validation passed", "file", certFile)
@@ -46,7 +46,7 @@ func runValidate(_ *cobra.Command, _ []string) {
 	// Validate certificate chain relationship
 	if err := validateCertificateChain(certFile, rootCAFile); err != nil {
 		logger.Error("Certificate chain validation failed", "error", err)
-		return
+		os.Exit(1)
 	}
 
 	logger.Info("✅ Certificate chain validation passed")
