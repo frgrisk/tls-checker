@@ -122,6 +122,7 @@ func ensureImageExists(ctx context.Context, cli *client.Client, imageName string
 				defer reader.Close()
 
 				_, _ = io.Copy(io.Discard, reader)
+
 				return nil
 			}).
 			Run()
@@ -278,6 +279,7 @@ func cleanupRabbitMQ(containerID string) {
 			if err := cli.ContainerRemove(ctx, containerID, container.RemoveOptions{}); err != nil {
 				return err
 			}
+
 			return nil
 		}).
 		Run()
