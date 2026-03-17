@@ -173,7 +173,7 @@ management.ssl.keyfile    = /etc/rabbitmq/certs/key.pem
 func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (string, error) {
 	ctx := context.Background()
 
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return "", fmt.Errorf("failed to create Docker client: %w", err)
 	}
@@ -259,7 +259,7 @@ func startRabbitMQServer(certFile, keyFile string, amqpPort, mgmtPortTLS int) (s
 func cleanupRabbitMQ(containerID string) {
 	ctx := context.Background()
 
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error("Failed to create Docker client for cleanup", "error", err)
 		return
