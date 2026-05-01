@@ -7,8 +7,8 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/docker/go-connections v0.6.0
-	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/docker/go-connections v0.7.0
+	github.com/rabbitmq/amqp091-go v1.11.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 )
