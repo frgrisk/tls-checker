@@ -6,11 +6,13 @@ linters:
     - depguard
     - err113
     - exhaustruct
+    - exhaustruct_v5
     - forbidigo
     - forcetypeassert
     - funlen
     - gochecknoglobals
     - gochecknoinits
+    - gomodguard
     - ireturn
     - nlreturn
     - noctx
